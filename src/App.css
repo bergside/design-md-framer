@@ -50,14 +50,13 @@ main {
 }
 
 a {
-  color: var(--framer-color-tint);
-  text-decoration: none;
+  color: #2563eb;
+  text-decoration: underline;
   transition: opacity 0.2s;
 }
 
 a:hover {
   opacity: 0.8;
-  text-decoration: underline;
 }
 
 .headerMeta {
@@ -91,8 +90,8 @@ a:hover {
 
 .controls {
   display: flex;
-  gap: 12px;
-  align-items: flex-end;
+  gap: 8px;
+  align-items: stretch;
 }
 
 .field {
@@ -129,10 +128,7 @@ a:hover {
 
 .fieldFormat {
   flex: 1;
-}
-
-.fieldName {
-  flex: 1.5;
+  min-width: 0;
 }
 
 .switcher {
@@ -192,6 +188,7 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
   padding: 8px 12px;
   background: var(--framer-color-bg-secondary);
   border-bottom: 1px solid var(--framer-color-divider);
@@ -214,14 +211,20 @@ a:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-right: 8px;
+  margin-right: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .editorActions {
   align-items: center;
   display: flex;
   gap: 4px;
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  margin-left: auto;
+  max-width: none;
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .editorActions button {
@@ -234,13 +237,14 @@ a:hover {
   font-weight: 500;
   height: 22px;
   line-height: 1;
-  padding: 0 6px;
+  padding: 0 5px;
   text-align: center;
   transition: all 0.2s;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   white-space: nowrap;
+  flex: 0 1 auto;
 }
 
 .editorActions button:hover {
@@ -321,12 +325,7 @@ a:hover {
 .footer a {
   font-size: 12px;
   line-height: 1.4;
-  color: var(--framer-color-text-secondary);
   text-align: center;
-}
-
-.footer a:hover {
-  color: var(--framer-color-text);
 }
 
 @media (max-width: 520px) {

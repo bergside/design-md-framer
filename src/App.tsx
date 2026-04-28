@@ -52,9 +52,22 @@ interface DesignSpec {
 
 interface PersistedState {
   format: OutputFormat
-  brandName: string
   content: string
   spec: DesignSpec
+}
+
+interface ExtractionMetrics {
+  colorStylesFound: number
+  textStylesFound: number
+  selectedNodes: number
+  colorTokensFromStyles: number
+  typographyTokensFromStyles: number
+  radiusValuesFound: number
+  spacingValuesFound: number
+  colorFallbackDefaults: number
+  typographyFallbackDefaults: number
+  usedRadiusFallback: boolean
+  usedSpacingFallback: boolean
 }
 
 interface ColorCandidate {
@@ -156,12 +169,10 @@ function parseSavedState(value: string | null): PersistedState | null {
     if (!isRecord(parsed)) return null
     if (!isDesignSpec(parsed.spec)) return null
     if (parsed.format !== "design" && parsed.format !== "skill") return null
-    if (typeof parsed.brandName !== "string") return null
     if (typeof parsed.content !== "string") return null
 
     return {
       format: parsed.format,
-      brandName: parsed.brandName,
       content: parsed.content,
       spec: parsed.spec,
     }
@@ -411,12 +422,10 @@ function renderSkillMarkdown(spec: DesignSpec): string {
   return appendReferences(markdown)
 }
 
-function renderMarkdown(format: OutputFormat, spec: DesignSpec, brandName: string): string {
-  const normalizedName = brandName.trim() || spec.name
-  const normalizedSpec = { ...spec, name: normalizedName }
+function renderMarkdown(format: OutputFormat, spec: DesignSpec): string {
   return format === "design"
-    ? renderDesignMarkdown(normalizedSpec)
-    : renderSkillMarkdown(normalizedSpec)
+    ? renderDesignMarkdown(spec)
+    : renderSkillMarkdown(spec)
 }
 
 function collectRadiusAndSpacing(selection: CanvasNode[]): { radius: number[]; spacing: number[] } {
@@ -437,7 +446,38 @@ function collectRadiusAndSpacing(selection: CanvasNode[]): { radius: number[]; s
   return { radius, spacing }
 }
 
-async function extractDesignSpec(brandName: string): Promise<{ spec: DesignSpec; notes: string[] }> {
+function buildExtractionNotes(metrics: ExtractionMetrics): string[] {
+  const notes: string[] = []
+  notes.push(
+    `Scanned ${metrics.colorStylesFound} color styles and ${metrics.textStylesFound} text styles from Framer assets.`,
+  )
+  notes.push(
+    `Mapped tokens from extracted styles: colors ${metrics.colorTokensFromStyles}/4, typography ${metrics.typographyTokensFromStyles}/3.`,
+  )
+  notes.push(
+    `Selection analyzed: ${metrics.selectedNodes} nodes, radius values ${metrics.radiusValuesFound}, spacing values ${metrics.spacingValuesFound}.`,
+  )
+
+  const fallbackParts: string[] = []
+  if (metrics.colorFallbackDefaults > 0) {
+    fallbackParts.push(`color defaults ${metrics.colorFallbackDefaults}`)
+  }
+  if (metrics.typographyFallbackDefaults > 0) {
+    fallbackParts.push(`typography defaults ${metrics.typographyFallbackDefaults}`)
+  }
+  if (metrics.usedRadiusFallback) fallbackParts.push("radius defaults")
+  if (metrics.usedSpacingFallback) fallbackParts.push("spacing defaults")
+
+  if (fallbackParts.length > 0) {
+    notes.push(`Fallbacks applied: ${fallbackParts.join(", ")}.`)
+  } else {
+    notes.push("No defaults were required; all core tokens were derived from project data.")
+  }
+
+  return notes
+}
+
+async function extractDesignSpec(systemName: string): Promise<{ spec: DesignSpec; notes: string[] }> {
   const [projectInfo, colorStyles, textStyles, selection] = await Promise.all([
     framer.getProjectInfo(),
     framer.getColorStyles(),
@@ -445,8 +485,20 @@ async function extractDesignSpec(brandName: string): Promise<{ spec: DesignSpec;
     framer.getSelection(),
   ])
 
-  const resolvedName = brandName.trim() || projectInfo.name.trim() || "Design System"
-  const notes: string[] = []
+  const resolvedName = systemName.trim() || projectInfo.name.trim() || "Design System"
+  const metrics: ExtractionMetrics = {
+    colorStylesFound: colorStyles.length,
+    textStylesFound: textStyles.length,
+    selectedNodes: selection.length,
+    colorTokensFromStyles: 0,
+    typographyTokensFromStyles: 0,
+    radiusValuesFound: 0,
+    spacingValuesFound: 0,
+    colorFallbackDefaults: 0,
+    typographyFallbackDefaults: 0,
+    usedRadiusFallback: false,
+    usedSpacingFallback: false,
+  }
 
   const colorCandidates: ColorCandidate[] = colorStyles.map((style) => {
     const hex = toHexColor(style.light)
@@ -460,9 +512,7 @@ async function extractDesignSpec(brandName: string): Promise<{ spec: DesignSpec;
   })
 
   const colors = { ...DEFAULT_COLORS }
-  if (!colorCandidates.length) {
-    notes.push("No color styles found; using fallback palette defaults.")
-  } else {
+  if (colorCandidates.length) {
     const used = new Set<string>()
 
     const primary =
@@ -528,16 +578,20 @@ async function extractDesignSpec(brandName: string): Promise<{ spec: DesignSpec;
     for (const [key, candidate] of semanticOrder) {
       if (candidate) {
         colors[key] = candidate.hex
+        metrics.colorTokensFromStyles += 1
         continue
       }
 
       const replacement = fallback.shift()
       if (replacement) {
         colors[key] = replacement.hex
+        metrics.colorTokensFromStyles += 1
       } else {
-        notes.push(`Color token "${key}" used fallback default ${colors[key]}.`)
+        metrics.colorFallbackDefaults += 1
       }
     }
+  } else {
+    metrics.colorFallbackDefaults = 4
   }
 
   const typographyCandidates: TypographyCandidate[] = textStyles
@@ -556,9 +610,7 @@ async function extractDesignSpec(brandName: string): Promise<{ spec: DesignSpec;
   let bodyMd: TypographyCandidate | null = null
   let labelCaps: TypographyCandidate | null = null
 
-  if (!typographyCandidates.length) {
-    notes.push("No text styles found; using fallback typography defaults.")
-  } else {
+  if (typographyCandidates.length) {
     const used = new Set<string>()
 
     h1 = pickTypographyCandidate(
@@ -602,19 +654,14 @@ async function extractDesignSpec(brandName: string): Promise<{ spec: DesignSpec;
     labelCaps: toTypographyToken(labelCaps, DEFAULT_TYPOGRAPHY.labelCaps),
   }
 
-  if (!h1) notes.push(`Token "h1" used fallback default ${DEFAULT_TYPOGRAPHY.h1.fontSize}.`)
-  if (!bodyMd) {
-    notes.push(`Token "body-md" used fallback default ${DEFAULT_TYPOGRAPHY.bodyMd.fontSize}.`)
-  }
-  if (!labelCaps) {
-    notes.push(
-      `Token "label-caps" used fallback default ${DEFAULT_TYPOGRAPHY.labelCaps.fontSize}.`,
-    )
-  }
+  metrics.typographyTokensFromStyles = Number(Boolean(h1)) + Number(Boolean(bodyMd)) + Number(Boolean(labelCaps))
+  metrics.typographyFallbackDefaults = 3 - metrics.typographyTokensFromStyles
 
   const { radius, spacing } = collectRadiusAndSpacing(selection)
-  if (!radius.length) notes.push("No border-radius values found in selection; using 4px/8px.")
-  if (!spacing.length) notes.push("No gap/padding values found in selection; using 8px/16px.")
+  metrics.radiusValuesFound = radius.length
+  metrics.spacingValuesFound = spacing.length
+  metrics.usedRadiusFallback = radius.length === 0
+  metrics.usedSpacingFallback = spacing.length === 0
 
   const spec: DesignSpec = {
     name: resolvedName,
@@ -625,7 +672,7 @@ async function extractDesignSpec(brandName: string): Promise<{ spec: DesignSpec;
     overview: DEFAULT_OVERVIEW,
   }
 
-  return { spec, notes }
+  return { spec, notes: buildExtractionNotes(metrics) }
 }
 
 function fallbackCopy(text: string): void {
@@ -650,10 +697,9 @@ async function persistState(state: PersistedState): Promise<void> {
 export function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [format, setFormat] = useState<OutputFormat>("design")
-  const [brandName, setBrandName] = useState("Design System")
   const [spec, setSpec] = useState<DesignSpec>(() => createDefaultSpec("Design System"))
   const [content, setContent] = useState<string>(() =>
-    renderMarkdown("design", createDefaultSpec("Design System"), "Design System"),
+    renderMarkdown("design", createDefaultSpec("Design System")),
   )
   const [notes, setNotes] = useState<string[]>([])
 
@@ -666,7 +712,6 @@ export function App() {
         if (saved) {
           if (!isMounted) return
           setFormat(saved.format)
-          setBrandName(saved.brandName)
           setSpec(saved.spec)
           setContent(saved.content)
           setNotes(["Restored previous session from plugin data."])
@@ -678,15 +723,14 @@ export function App() {
         const fallbackSpec = createDefaultSpec(initialName)
 
         if (!isMounted) return
-        setBrandName(initialName)
         setSpec(fallbackSpec)
-        setContent(renderMarkdown("design", fallbackSpec, initialName))
+        setContent(renderMarkdown("design", fallbackSpec))
 
         const extracted = await extractDesignSpec(initialName)
         if (!isMounted) return
         setSpec(extracted.spec)
         setNotes(extracted.notes)
-        setContent(renderMarkdown("design", extracted.spec, extracted.spec.name))
+        setContent(renderMarkdown("design", extracted.spec))
       } finally {
         if (isMounted) setIsLoading(false)
       }
@@ -702,16 +746,16 @@ export function App() {
     if (isLoading) return
 
     const timeout = window.setTimeout(() => {
-      void persistState({ format, brandName, content, spec })
+      void persistState({ format, content, spec })
     }, 300)
 
     return () => {
       window.clearTimeout(timeout)
     }
-  }, [isLoading, format, brandName, content, spec])
+  }, [isLoading, format, content, spec])
 
   const handleRegenerate = () => {
-    setContent(renderMarkdown(format, spec, brandName))
+    setContent(renderMarkdown(format, spec))
     framer.notify("Markdown regenerated from current style model.", {
       variant: "info",
     })
@@ -791,7 +835,7 @@ export function App() {
               className={format === "design" ? "switcherButton active" : "switcherButton"}
               onClick={() => {
                 setFormat("design")
-                setContent(renderMarkdown("design", spec, brandName))
+                setContent(renderMarkdown("design", spec))
               }}
             >
               DESIGN.md
@@ -801,22 +845,12 @@ export function App() {
               className={format === "skill" ? "switcherButton active" : "switcherButton"}
               onClick={() => {
                 setFormat("skill")
-                setContent(renderMarkdown("skill", spec, brandName))
+                setContent(renderMarkdown("skill", spec))
               }}
             >
               SKILL.md
             </button>
           </div>
-        </label>
-
-        <label className="field fieldName">
-          <span>Design system name</span>
-          <input
-            type="text"
-            value={brandName}
-            onChange={(event) => setBrandName(event.target.value)}
-            placeholder="Heritage"
-          />
         </label>
       </section>
 
