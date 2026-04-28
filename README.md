@@ -1,6 +1,6 @@
 # DESIGN.md Generator for Framer - TypeUI
 
-
+<img width="1200" height="630" alt="og-framer" src="https://github.com/user-attachments/assets/776b103b-588b-4d10-820f-7fea6ece8901" />
 
 <br/>
 
