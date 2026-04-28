@@ -840,7 +840,7 @@ export function App() {
     <main>
       <header className="header">
         <div>
-          <h1>DESIGN.md generator - TypeUI</h1>
+          <h1>DESIGN.md Generator for Framer - TypeUI</h1>
           <p className="headerSingleRow">
             Automatically extracts local Framer style guidelines and creates editable DESIGN.md and SKILL.md drafts. Built by <a href={TYPEUI_HOME_URL} target="_blank" rel="noreferrer">TypeUI</a>.
           </p>
@@ -945,10 +945,8 @@ export function App() {
       </section>
 
       <footer className="footer">
-        <a href={TYPEUI_SKILLS_URL} target="_blank" rel="noreferrer">
-          Find more curated design skills at TypeUI and improve UI generation
+          Find more <a href={TYPEUI_SKILLS_URL} target="_blank" rel="noreferrer">curated design skills</a> at TypeUI and improve UI generation
           with AI.
-        </a>
       </footer>
     </main>
   )
