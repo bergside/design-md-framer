@@ -54,6 +54,7 @@ interface PersistedState {
   format: OutputFormat
   content: string
   spec: DesignSpec
+  metrics?: ExtractionMetrics
 }
 
 interface ExtractionMetrics {
@@ -161,6 +162,24 @@ function isDesignSpec(value: unknown): value is DesignSpec {
   )
 }
 
+function isExtractionMetrics(value: unknown): value is ExtractionMetrics {
+  if (!isRecord(value)) return false
+
+  return (
+    typeof value.colorStylesFound === "number" &&
+    typeof value.textStylesFound === "number" &&
+    typeof value.selectedNodes === "number" &&
+    typeof value.colorTokensFromStyles === "number" &&
+    typeof value.typographyTokensFromStyles === "number" &&
+    typeof value.radiusValuesFound === "number" &&
+    typeof value.spacingValuesFound === "number" &&
+    typeof value.colorFallbackDefaults === "number" &&
+    typeof value.typographyFallbackDefaults === "number" &&
+    typeof value.usedRadiusFallback === "boolean" &&
+    typeof value.usedSpacingFallback === "boolean"
+  )
+}
+
 function parseSavedState(value: string | null): PersistedState | null {
   if (!value) return null
 
@@ -175,6 +194,7 @@ function parseSavedState(value: string | null): PersistedState | null {
       format: parsed.format,
       content: parsed.content,
       spec: parsed.spec,
+      metrics: isExtractionMetrics(parsed.metrics) ? parsed.metrics : undefined,
     }
   } catch {
     return null
@@ -477,7 +497,17 @@ function buildExtractionNotes(metrics: ExtractionMetrics): string[] {
   return notes
 }
 
-async function extractDesignSpec(systemName: string): Promise<{ spec: DesignSpec; notes: string[] }> {
+function buildSpecBasedNotes(spec: DesignSpec): string[] {
+  return [
+    "Token model counts: colors 4, typography 3, radius 2, spacing 2.",
+    "Generated from extracting Framer color styles, text styles, and selected node layout/radius values.",
+    `Current tokens: primary ${spec.colors.primary}, secondary ${spec.colors.secondary}, tertiary ${spec.colors.tertiary}, neutral ${spec.colors.neutral}.`,
+  ]
+}
+
+async function extractDesignSpec(
+  systemName: string,
+): Promise<{ spec: DesignSpec; notes: string[]; metrics: ExtractionMetrics }> {
   const [projectInfo, colorStyles, textStyles, selection] = await Promise.all([
     framer.getProjectInfo(),
     framer.getColorStyles(),
@@ -672,7 +702,7 @@ async function extractDesignSpec(systemName: string): Promise<{ spec: DesignSpec
     overview: DEFAULT_OVERVIEW,
   }
 
-  return { spec, notes: buildExtractionNotes(metrics) }
+  return { spec, notes: buildExtractionNotes(metrics), metrics }
 }
 
 function fallbackCopy(text: string): void {
@@ -698,6 +728,7 @@ export function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [format, setFormat] = useState<OutputFormat>("design")
   const [spec, setSpec] = useState<DesignSpec>(() => createDefaultSpec("Design System"))
+  const [metrics, setMetrics] = useState<ExtractionMetrics | null>(null)
   const [content, setContent] = useState<string>(() =>
     renderMarkdown("design", createDefaultSpec("Design System")),
   )
@@ -713,8 +744,9 @@ export function App() {
           if (!isMounted) return
           setFormat(saved.format)
           setSpec(saved.spec)
+          setMetrics(saved.metrics ?? null)
           setContent(saved.content)
-          setNotes(["Restored previous session from plugin data."])
+          setNotes(saved.metrics ? buildExtractionNotes(saved.metrics) : buildSpecBasedNotes(saved.spec))
           return
         }
 
@@ -724,13 +756,21 @@ export function App() {
 
         if (!isMounted) return
         setSpec(fallbackSpec)
+        setMetrics(null)
+        setNotes(buildSpecBasedNotes(fallbackSpec))
         setContent(renderMarkdown("design", fallbackSpec))
 
-        const extracted = await extractDesignSpec(initialName)
-        if (!isMounted) return
-        setSpec(extracted.spec)
-        setNotes(extracted.notes)
-        setContent(renderMarkdown("design", extracted.spec))
+        try {
+          const extracted = await extractDesignSpec(initialName)
+          if (!isMounted) return
+          setSpec(extracted.spec)
+          setMetrics(extracted.metrics)
+          setNotes(extracted.notes)
+          setContent(renderMarkdown("design", extracted.spec))
+        } catch {
+          if (!isMounted) return
+          setNotes(buildSpecBasedNotes(fallbackSpec))
+        }
       } finally {
         if (isMounted) setIsLoading(false)
       }
@@ -746,13 +786,13 @@ export function App() {
     if (isLoading) return
 
     const timeout = window.setTimeout(() => {
-      void persistState({ format, content, spec })
+      void persistState({ format, content, spec, metrics: metrics ?? undefined })
     }, 300)
 
     return () => {
       window.clearTimeout(timeout)
     }
-  }, [isLoading, format, content, spec])
+  }, [isLoading, format, content, spec, metrics])
 
   const handleRegenerate = () => {
     setContent(renderMarkdown(format, spec))
@@ -803,11 +843,10 @@ export function App() {
           <h1>DESIGN.md generator - TypeUI</h1>
           <p>
             Automatically extracts local Framer style guidelines and creates
-            editable DESIGN.md and SKILL.md drafts. Based on{" "}
+            editable DESIGN.md and SKILL.md drafts. Built by {" "}
             <a href={TYPEUI_HOME_URL} target="_blank" rel="noreferrer">
               TypeUI
-            </a>{" "}
-            configuration.
+            </a>.
           </p>
         </div>
         <div className="headerMeta">
