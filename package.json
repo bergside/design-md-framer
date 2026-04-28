@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Automatically extracts local Framer style guidelines and creates editable DESIGN.md and SKILL.md drafts. Built by TypeUI.",
+  "description": "Automatically extracts local Framer style guidelines and creates editable DESIGN.md and SKILL.md drafts.",
   "repository": "https://github.com/bergside/design-md-framer",
   "author": "Bergside",
   "license": "MIT",
