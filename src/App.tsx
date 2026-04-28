@@ -841,9 +841,8 @@ export function App() {
       <header className="header">
         <div>
           <h1>DESIGN.md generator - TypeUI</h1>
-          <p>
-            Automatically extracts local Framer style guidelines and creates
-            editable DESIGN.md and SKILL.md drafts. Built by {" "}
+          <p className="headerSingleRow">
+            Automatically extracts local Framer style guidelines and creates editable DESIGN.md and SKILL.md drafts. Built by{" "}
             <a href={TYPEUI_HOME_URL} target="_blank" rel="noreferrer">
               TypeUI
             </a>.
@@ -864,6 +863,24 @@ export function App() {
           </a>
         </div>
       </header>
+
+      {notes.length > 0 && (
+        <section className="notes">
+          <p className="notesTitle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            Extraction notes
+          </p>
+          <ul>
+            {notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="controls">
         <label className="field fieldFormat">
@@ -892,24 +909,6 @@ export function App() {
           </div>
         </label>
       </section>
-
-      {notes.length > 0 && (
-        <section className="notes">
-          <p className="notesTitle">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-            Extraction notes
-          </p>
-          <ul>
-            {notes.map((note) => (
-              <li key={note}>{note}</li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       <section className="editorWrap">
         <div className="editorHeader">

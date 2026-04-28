@@ -49,6 +49,12 @@ main {
   max-width: 90%;
 }
 
+.headerSingleRow {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 a {
   color: #2563eb;
   text-decoration: underline;
